@@ -1,0 +1,43 @@
+# :vim: set syntax=yaml
+
+---
+
+all:
+  vars:
+    
+    internal_network: '192.168.5.0/24'
+    internal_gateway: '192.168.5.1'
+    local_network: '192.168.1.0/24'
+
+    pod_network: '10.230.0.0/16'
+
+  children:
+    'control-plane':
+      hosts:
+        'kube-c':
+          ansible_host: kube-c1-c.internal
+          ansible_port: 22
+          fqdn: kube-c1-c.internal
+          hostname: kube-c1-c
+          ipv4_address: '192.168.5.30'
+    'nodes':
+      hosts:
+        'kube-n01':
+          ansible_host: kube-c1-n01.internal
+          ansible_port: 22
+          fqdn: kube-c1-n01.internal
+          hostname: kube-c1-n01
+          ipv4_address: '192.168.5.31'
+        'kube-n02':
+          ansible_host: kube-c1-n02.internal
+          ansible_port: 22
+          fqdn: kube-c1-n02.internal
+          hostname: kube-c1-n02
+          ipv4_address: '192.168.5.32'
+        'kube-n03':
+          ansible_host: kube-c1-n03.internal
+          ansible_port: 22
+          fqdn: kube-c1-n03.internal
+          hostname: kube-c1-n03
+          ipv4_address: '192.168.5.33'
+       

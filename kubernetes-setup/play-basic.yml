@@ -1,0 +1,57 @@
+---
+
+ #
+ # Basic setup
+ #
+
+ - hosts: all 
+   
+   tasks:
+   
+   - apt: update_cache=yes
+   - apt: pkg={{item}} state=latest
+     with_items: [ 'vim', 'tree', 'jq', 'curl', 'screen', 'htop', 'bash-completion', 'ca-certificates']
+  
+   - hostname: name={{hostname}}
+     when: hostname is defined
+
+   - name: Update /etc/hosts with local hostname
+     lineinfile:
+       dest: /etc/hosts
+       regexp: '^127\.0\.1\.1'
+       line: '127.0.1.1 {{ansible_hostname}} {{hostname}}'
+       state: present
+     when: hostname is defined 
+
+   - name: Update /etc/hosts
+     lineinfile:
+       dest: /etc/hosts
+       line: '{{hostvars[item].ipv4_address}} {{hostvars[item].hostname}} {{item}}'
+       regexp: '{{hostvars[item].ipv4_address | replace(".", "[.]")}}'
+       insertafter: '^127\.0\.1\.1 .*'
+     with_items: '{{groups.all}}'
+
+   - group: name=wheel state=present
+   
+   - name: Add rules for sudoers (wheel)
+     copy:
+       dest: /etc/sudoers.d/wheel
+       content: '%wheel ALL=(ALL) NOPASSWD:ALL'
+   
+   - name: Add a sudoer user 
+     user:
+       name: user
+       shell: /bin/bash
+       groups: ['wheel']   
+
+   - name: Set authorized key for user `user`
+     authorized_key:
+       user: user
+       state: present
+       key: "{{ lookup('file', 'keys/id_rsa.pub') }}" 
+
+   - file: path=~/bin state=directory
+   
+   - copy: src=files/{{item.key}} dest=~/{{item.value}} mode=0644
+     with_dict: { 'profile': '.profile', 'bashrc': '.bashrc' }
+ 

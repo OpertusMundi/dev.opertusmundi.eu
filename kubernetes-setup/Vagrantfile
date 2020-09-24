@@ -1,0 +1,91 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require 'yaml'
+
+inventory_file = ENV['INVENTORY_FILE'] || 'hosts.yml'
+
+inventory = YAML.load_file(inventory_file)
+inventory_vars = inventory['all']['vars']
+inventory_groups = inventory['all']['children']
+
+internal_gateway = inventory_vars['internal_gateway']
+local_network = inventory_vars['local_network']
+
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "ubuntu/xenial64"
+  config.vm.box_check_update = false
+
+  config.vm.synced_folder "./vagrant-data/", "/vagrant", type: "rsync"
+
+  # Define and provision control-plane
+
+  config.vm.define "kube-c" do |master|
+    h = inventory_groups['control-plane']['hosts']['kube-c']
+    master.vm.network "private_network", ip: h['ipv4_address']
+    master.vm.provider "virtualbox" do |vb|
+      vb.name = h['fqdn']
+      vb.memory = 2048
+    end
+  end
+
+  # Define and provision nodes
+
+  inventory_groups['nodes']['hosts'].keys.each do |machine_name|
+    config.vm.define machine_name do |machine|
+      h = inventory_groups['nodes']['hosts'][machine_name]
+      machine.vm.network "private_network", ip: h['ipv4_address']
+      machine.vm.provider "virtualbox" do |vb|
+         vb.name = h['fqdn']
+         vb.memory = 2048
+      end
+    end
+  end
+
+  # Provision (common)
+  
+  config.vm.provision "shell", run: "always", inline: <<-EOD
+  	ip route add #{local_network} via #{internal_gateway}
+  EOD
+
+  config.vm.provision "file", source: "files/profile", destination: ".profile"
+  config.vm.provision "file", source: "files/bashrc", destination: ".bashrc"
+
+  config.vm.provision "shell", inline: <<-EOD
+    apt-get update && apt-get install -y sudo python
+  EOD
+  
+  config.vm.provision "play-basic", type: "ansible" do |ansible| 
+    ansible.playbook = 'play-basic.yml'
+    ansible.become = true
+    ansible.become_user = 'root'
+    ansible.inventory_path = inventory_file
+    ansible.verbose = true
+  end
+  
+  config.vm.provision "play-docker", type: "ansible" do |ansible| 
+    ansible.playbook = 'play-docker.yml'
+    ansible.become = true
+    ansible.become_user = 'root'
+    ansible.inventory_path = inventory_file
+    ansible.verbose = true
+  end
+  
+  config.vm.provision "play-kubernetes-1", type: "ansible" do |ansible| 
+    ansible.playbook = 'play-kubernetes-init-cluster.yml'
+    ansible.become = true
+    ansible.become_user = 'root'
+    ansible.inventory_path = inventory_file
+    ansible.verbose = true
+  end
+  
+  config.vm.provision "play-kubernetes-2", type: "ansible" do |ansible| 
+    ansible.playbook = 'play-kubernetes-join-cluster.yml'
+    ansible.become = true
+    ansible.become_user = 'root'
+    ansible.inventory_path = inventory_file
+    ansible.verbose = true
+  end
+
+end

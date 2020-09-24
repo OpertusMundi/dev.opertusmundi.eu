@@ -1,0 +1,18 @@
+---
+
+ - hosts: nodes
+
+   tasks:
+   
+   - debug: var=play_hosts
+   - debug: var=groups.all
+ 
+   - set_fact:
+       ca_certificate_hash: "{{lookup('file', '.data/kube-c/ca-certificate-hash.txt')}}"
+       join_token: "{{lookup('file', '.data/kube-c/token.txt')}}"
+       apiserver_address: "{{hostvars['kube-c'].ipv4_address}}:6443"
+
+   - name: Join node into cluster
+     shell: >
+       kubeadm join {{apiserver_address}} --token {{join_token}} --discovery-token-ca-cert-hash sha256:{{ca_certificate_hash}} |
+       tee kubeadm-join.txt

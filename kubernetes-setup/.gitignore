@@ -1,0 +1,10 @@
+hosts.yml
+*.swp
+*.log
+*.retry
+scratch-*.yml
+/.vagrant/
+/vagrant-data/
+/data/
+/.data/
+/keys/id_rsa*

@@ -1,0 +1,153 @@
+---
+
+ - hosts: all
+
+   tasks:
+   
+   - debug: var=play_hosts
+   - debug: var=groups.all
+ 
+   - modprobe: name=br_netfilter state=present
+
+   - name: Add APT key for Google repositories
+     apt_key:
+       url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+       state: present
+
+   - name: Add Google repositories 
+     apt_repository:
+       repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+       state: present
+
+   - apt: update_cache=yes
+   - apt: pkg={{item}} state=latest
+     with_items: [ 'kubelet', 'kubeadm', 'kubectl' ]
+   
+   - name: Prevent kube* packages from being automatically upgraded
+     shell:
+       cmd: apt-mark hold kubelet kubeadm kubectl
+ 
+
+ - hosts: kube-c
+
+   tasks:
+
+   - debug: var=play_hosts    
+   - debug: var=groups.all
+
+   - name: Install Bash completion for kubeadm
+     shell:
+       cmd: kubeadm completion bash > /etc/bash_completion.d/kubeadm
+       creates: /etc/bash_completion.d/kubeadm
+   
+   - name: Install Bash completion for kubectl
+     shell:
+       cmd: kubectl completion bash > /etc/bash_completion.d/kubectl
+       creates: /etc/bash_completion.d/kubectl
+
+   - name: Download Docker images needed for kubeadm setup
+     shell:
+       cmd: kubeadm config images pull 
+
+   - name: Initialize cluster
+     shell:
+       cmd: >
+         kubeadm init --apiserver-advertise-address {{ipv4_address}} --pod-network-cidr {{pod_network}} 2>&1 |
+         tee kubeadm-init.txt
+       creates: kubeadm-init.txt  
+   
+   - name: Prepare directory for user-local kubeadm configuration
+     file:
+       path: '/home/{{item}}/.kube'
+       state: directory
+       owner: '{{item}}'
+       group: '{{item}}'
+     with_items: ['user', '{{ansible_user}}']
+   
+   - name: Copy kubeadm configuration for normal users
+     copy:
+       src: /etc/kubernetes/admin.conf
+       remote_src: true
+       dest: '/home/{{item}}/.kube/config'
+       owner: '{{item}}'
+       group: '{{item}}'
+       mode: 0600
+     with_items: ['user', '{{ansible_user}}']
+
+   - name: Compute the SHA256 digest of CA certificate for this cluster 
+     shell: >
+       openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | 
+       openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //' 
+       > ca-certificate-hash.txt
+   
+   - file:
+       path: ca-certificate-hash.txt
+       state: file
+       owner: "{{ansible_user}}"
+       group: "{{ansible_user}}"
+  
+   - name: Fetch the CA certificate digest
+     fetch: 
+       src: ca-certificate-hash.txt 
+       dest: .data
+   
+   - name: Store join token into a file
+     shell:
+       cmd: kubeadm token list -o json | jq -r .token > token.txt
+   
+   - file:
+       path: token.txt
+       state: file
+       owner: "{{ansible_user}}"
+       group: "{{ansible_user}}"
+
+   - name: Fetch join token
+     fetch:
+       src: token.txt
+       dest: .data
+   
+   #
+   # Setup networking with Calico
+   # see https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises#install-calico-with-kubernetes-api-datastore-50-nodes-or-less
+   #
+
+   - name: Wait for API server to be reachable
+     wait_for:
+       host: 127.0.0.1
+       port: 6443
+       delay: 5
+       timeout: 10
+
+   - name: Download configuration (ConfigMap) for Calico network plugin
+     get_url:
+       url: https://docs.projectcalico.org/manifests/calico.yaml
+       dest: "{{ansible_env.PWD}}/calico.yml"
+     become: false
+   
+   - file:
+       path: calico.yml
+       state: file
+     become: false
+
+   - name: Install Calico network plugin
+     shell:
+       cmd: >
+         kubectl apply -f calico.yml 2>&1 | tee kubectl-apply-calico.txt
+     become: false
+  
+   #
+   # Wait for system Pods to start
+   #
+  
+   - pause: seconds=180
+
+   - name: Loop until all system Pods are up and running
+     shell: >
+        kubectl get pods -n kube-system -o json| 
+        jq -r '.items[]| select(.status.phase!="Running")| {name: .metadata.name, status: .status.phase}'
+     register: kubectl_get_non_running_pods_result
+     become: false  
+     retries: 15
+     delay: 10
+     until: kubectl_get_non_running_pods_result.stdout| length == 0
+  
