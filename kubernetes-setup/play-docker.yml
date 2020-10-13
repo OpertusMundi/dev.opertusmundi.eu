@@ -1,6 +1,8 @@
 ---
 
- - hosts: all
+ - hosts:
+   - 'control-plane'
+   - 'nodes'
 
    tasks:
    

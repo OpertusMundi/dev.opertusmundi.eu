@@ -7,4 +7,6 @@ scratch-*.yml
 /vagrant-data/
 /data/
 /.data/
-/keys/id_rsa*
+/keys/
+/certs/
+/secrets/

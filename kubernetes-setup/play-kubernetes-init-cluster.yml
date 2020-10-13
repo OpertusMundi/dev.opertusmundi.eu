@@ -1,6 +1,8 @@
 ---
 
- - hosts: all
+ - hosts:
+   - 'control-plane'
+   - 'nodes'
 
    tasks:
    
@@ -28,7 +30,7 @@
        cmd: apt-mark hold kubelet kubeadm kubectl
  
 
- - hosts: kube-c
+ - hosts: 'kube-c'
 
    tasks:
 
@@ -141,6 +143,7 @@
   
    - pause: seconds=180
 
+   # TODO a `kubectl wait` command may be more suitable here
    - name: Loop until all system Pods are up and running
      shell: >
         kubectl get pods -n kube-system -o json| 
