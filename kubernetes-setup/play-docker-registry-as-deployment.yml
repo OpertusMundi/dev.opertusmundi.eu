@@ -1,0 +1,137 @@
+---
+
+ - hosts: 
+   - control-plane
+
+   tasks:
+   
+   - debug: var=play_hosts
+   - debug: var=groups.all
+
+   - file:
+       path: ~/setup/
+       state: directory
+
+   - copy:
+       src: files/setup/docker-registry
+       dest: ~/setup/
+   
+   - copy:
+       src: '{{registry.tls_cert_file}}'
+       dest:  ~/setup/docker-registry/server.crt
+   
+   - copy:
+       src: '{{registry.tls_key_file}}'
+       dest:  ~/setup/docker-registry/server.key
+       mode: 0600
+   
+   - copy:
+       src: '{{registry.passwd_file}}'
+       dest:  ~/setup/docker-registry/passwd
+       mode: 0600
+
+   - shell:
+       cmd: >
+         kubectl get ns docker-registry -o name || kubectl create ns docker-registry
+   
+   - shell:
+       cmd: >
+         kubectl apply -f service.yml
+       chdir: ~/setup/docker-registry
+
+   - shell:
+       cmd: >
+         kubectl get service -n docker-registry registry -o json > registry-service.json
+   
+   - fetch:
+       src: registry-service.json
+       dest: .data/docker-registry/registry-service.json
+       flat: true
+ 
+   - name: Create or update secret for TLS certificate for registry
+     shell:
+       cmd: >-
+         kubectl create secret tls registry-tls -n docker-registry --cert=server.crt --key=server.key --dry-run=client -o yaml |
+           kubectl apply -f -
+       chdir: ~/setup/docker-registry
+   
+   - name: Generate htpasswd file for Basic authentication
+     shell:
+       cmd: >-
+         gawk -F':' '{print $1, $2}' passwd | 
+           xargs -n2 docker run --rm httpd:2.4-alpine htpasswd -Bbn | grep -v '^$' > htpasswd
+       chdir: ~/setup/docker-registry
+   
+   - file:
+       path: ~/setup/docker-registry/htpasswd
+       state: file
+       mode: 0600
+
+   - name: Create or replace secret htpasswd file for registry
+     shell:
+       cmd: >-
+         kubectl create secret generic registry-htpasswd -n docker-registry --from-file=htpasswd=htpasswd --dry-run=client -o yaml |
+           kubectl apply -f -
+       chdir: ~/setup/docker-registry
+
+   - shell:
+       cmd: head -n1 ~/setup/docker-registry/passwd
+     register: registry_credentials_output
+   - set_fact:
+       registry_user: '{{registry_credentials_output.stdout.split(":")[0]}}'
+       registry_pass: '{{registry_credentials_output.stdout.split(":")[1]}}'
+
+   # see also: kubectl explain pod.spec.imagePullSecrets
+   - name: Create or replace secret (for imagePullSecrets) for authenticating as a client to the docker registry
+     shell:
+       cmd: >-
+         kubectl create secret docker-registry docker-registy-auth-1 -n default --dry-run=client -o yaml
+         --docker-server={{registry.hostname}} --docker-username={{registry_user}} --docker-password={{registry_pass}} | 
+           kubectl apply -f -
+
+   # NOTE: The PersistentVolume (PV) needed for the registry is not defined here (only the PersistentVolumeClaim, PVC)!
+   # So, the deployment should appear as pending (waits for a PV to bind to the PVC)
+   - name: Create or replace deployment for registry
+     shell:
+       cmd: kubectl apply -f deployment.yml 
+       chdir: ~/setup/docker-registry 
+
+
+
+ - hosts: all
+ 
+   tasks:
+     
+   - set_fact:
+       registry_service: "{{lookup('file', '.data/docker-registry/registry-service.json') | from_json}}"
+   - set_fact:
+       registry_service_host: "{{registry_service.spec.clusterIP}}"
+
+   - debug: var=registry_service_host
+
+   - name: Update /etc/hosts with name for registry service
+     lineinfile:
+       dest: /etc/hosts
+       line: '{{registry_service_host}} {{registry.hostname}}'
+       regexp: '{{registry_service_host | replace(".", "[.]")}}'
+     become: yes
+     become_user: root
+
+   - name: Add CA certificate under trusted certificates
+     copy: 
+       src: '{{registry.ca_file}}'
+       dest: '/usr/local/share/ca-certificates/{{registry.ca_file | basename}}'
+       owner: root
+       mode: 0644
+       force: no
+     become: yes
+     become_user: root
+     when: registry.ca_file is defined 
+
+   - name: Update list of trusted certificates 
+     shell:
+       cmd: update-ca-certificates
+     become: yes
+     become_user: root
+     when: registry.ca_file is defined 
+

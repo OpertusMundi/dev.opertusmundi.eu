@@ -11,6 +11,17 @@ all:
 
     pod_network: '10.230.0.0/16'
 
+    # (optional) configuration for an internal docker registry
+    registry:
+      hostname: 'registry.internal'
+      # note: the TLS certificate MUST constain {registry.hostname} as a DNS subjectAltName
+      tls_cert_file: 'certs/registry.internal/server.crt'
+      tls_key_file: 'certs/registry.internal/server.key'
+      # an optional CA certificate (signing our registry certificate)
+      ca_file: 'certs/root-localdomain.crt'
+      # the password file for authenticationg registry clients (lines of user:password)
+      passwd_file: 'secrets/registry.internal/passwd'
+
   children:
     'control-plane':
       hosts:

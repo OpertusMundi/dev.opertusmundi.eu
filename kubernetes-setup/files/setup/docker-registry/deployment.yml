@@ -1,0 +1,73 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: 'registry-data-pvc'
+  namespace: docker-registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  storageClassName: local-1
+  resources:
+    requests:
+      storage: 4Gi
+  volumeName: 'registry-data'
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: docker-registry
+  labels:
+    app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      volumes:
+      - name: 'data-directory'
+        persistentVolumeClaim:
+          claimName: 'registry-data-pvc'
+      - name: 'certs'
+        secret:
+          secretName: 'registry-tls'
+      - name: 'auth'
+        secret:
+          secretName: 'registry-htpasswd'
+      containers:
+      - name: registry
+        image: 'registry:2.7'
+        env:
+        - name: REGISTRY_HTTP_ADDR 
+          value: '0.0.0.0:443'
+        - name: REGISTRY_HTTP_TLS_CERTIFICATE
+          value: '/certs/tls.crt'
+        - name: REGISTRY_HTTP_TLS_KEY
+          value: '/certs/tls.key'
+        - name: REGISTRY_STORAGE_DELETE_ENABLED
+          value: 'true'
+        - name: REGISTRY_AUTH
+          value: 'htpasswd'
+        - name: REGISTRY_AUTH_HTPASSWD_REALM
+          value: 'Registry Realm'
+        - name: REGISTRY_AUTH_HTPASSWD_PATH
+          value: '/auth/htpasswd'
+        volumeMounts:
+        - name: 'data-directory'
+          mountPath: /var/lib/registry
+        - name: 'certs'
+          readOnly: true
+          mountPath: /certs
+        - name: 'auth'
+          readOnly: true
+          mountPath: /auth
+        ports:
+        - containerPort: 443
