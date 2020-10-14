@@ -16,4 +16,13 @@ Copy `hosts.yml.example` into `hosts.yml` and configure your hosts.
 
 ## 2. Play
 
-__Todo__
+We build the cluster as a sequence of *provision* stages. Each stage is represented by an Ansible playbook.These playbooks can be run either directly (via `ansible-playbook`), or indirectly as Vagrant provisioning steps (via `vagrant provision --provision-with=NAME`).
+
+The stages are (in this order):
+
+  1. `play-basic`: Common setup for all machines (basic tools, CA certificates, hostnames etc.)
+  2. `play-docker`: Setup Docker engine on all cluster nodes (the Container Runtime for the cluster).
+  3. `play-kubernetes-init-cluster`: Initialize the Kubernetes cluster on the control-plane machine. This step includes setup for networking (Container Networking).
+  4. `play-kubernetes-join-cluster`: Join worker nodes on the Kubernetes cluster
+  5. `play-docker-registry-as-deployment`: (optional) Setup a internal Docker registry as a Kubernetes deployment
+
