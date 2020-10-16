@@ -23,7 +23,7 @@ all:
       passwd_file: 'secrets/registry.internal/passwd'
 
   children:
-    'control-plane':
+    'controlplane':
       hosts:
         'kube-c':
           ansible_host: kube-c1-c.internal

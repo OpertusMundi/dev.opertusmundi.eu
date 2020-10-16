@@ -19,10 +19,10 @@ Vagrant.configure(2) do |config|
 
   config.vm.synced_folder "./vagrant-data/", "/vagrant", type: "rsync"
 
-  # Define and provision control-plane
+  # Define and provision control plane
 
   config.vm.define "kube-c" do |master|
-    h = inventory_groups['control-plane']['hosts']['kube-c']
+    h = inventory_groups['controlplane']['hosts']['kube-c']
     master.vm.network "private_network", ip: h['ipv4_address']
     master.vm.provider "virtualbox" do |vb|
       vb.name = h['fqdn']
