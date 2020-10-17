@@ -1,0 +1,90 @@
+---
+
+ - hosts: all
+   
+   tasks: 
+
+   - debug: var=play_hosts
+
+   - name: Find the internal IPv4 interface
+     shell:
+       cmd: >
+         ip addr show to {{internal_network}} | grep -Po -e '(?<=^[1-9][:][\s])(.*)(?=[:])'
+     register: internal_iface_result
+   
+   - name: Find the external IPv4 interface
+     shell:
+       cmd: >
+         ip -brief link show | grep -F -w -e '{{external_mac_address}}' | awk '{print $1}'
+     register: external_iface_result
+
+   - set_fact:
+       internal_iface: "{{internal_iface_result.stdout}}"
+       external_iface: "{{external_iface_result.stdout}}"
+   
+   # https://wiki.debian.org/NetworkConfiguration#Bringing_up_an_interface_without_an_IP_address
+   - name: Generate configuration stanza for external interface
+     copy:
+       content: |
+         auto {{external_iface}}
+         iface {{external_iface}} inet manual
+            pre-up ifconfig $IFACE up
+            post-down ifconfig $IFACE down
+       dest: /etc/network/interfaces.d/51.cfg
+       backup: yes
+
+   - apt: update_cache=yes
+
+   - name: Enable IPv4 forwarding
+     sysctl:
+       name: net.ipv4.ip_forward
+       value: 1
+       state: present
+
+   # Install firewall.service
+
+   - copy:
+       src: files/etc/systemd/system/firewall.service
+       dest: /etc/systemd/system/firewall.service 
+   
+   - file:
+       path: /usr/local/firewall/
+       state: directory 
+
+   - copy:
+       src: files/usr/local/firewall/{{item}}
+       dest: /usr/local/firewall/{{item}}
+       mode: 0755
+     with_items: ['setup-firewall.sh', 'teardown-firewall.sh']  
+    
+   - template:
+       src: templates/etc/default/firewall
+       dest: /etc/default/firewall
+
+   - systemd:
+       enabled: yes
+       #state: started
+       name: firewall.service
+   
+   # Install and configure keepalived
+   
+   - apt:
+       state: latest
+       pkg: ['keepalived', 'ipvsadm']
+   
+   - name: Load IPVS kernel module (permanently)
+     lineinfile:
+       dest: /etc/modules
+       regexp: '^ip_vs$'
+       line: 'ip_vs' 
+       state: present 
+
+   - name: Generate configuration for keepalived
+     template:
+       src: templates/etc/keepalived/keepalived.conf.j2
+       dest: /etc/keepalived/keepalived.conf
+     vars:
+       auth_password: "{{lookup('password', 'secrets/keepalived/password length=8 chars=digits')}}"
+       # the initial state for the VRRP router
+       vrrp_state: "{{'BACKUP' if (inventory_hostname == 'backup') else 'MASTER'}}"
+  

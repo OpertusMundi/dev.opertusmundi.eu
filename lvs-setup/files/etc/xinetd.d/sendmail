@@ -1,0 +1,16 @@
+service sendmail
+{
+    disable        = no 
+    bind           = localhost
+    port           = 25
+    socket_type    = stream
+    protocol       = tcp
+    wait           = no
+    user           = mail
+    server         = /usr/sbin/sendmail
+    server_args    = -bs
+    type           = unlisted
+    log_type       = SYSLOG mail info
+    log_on_failure = ATTEMPT
+}
+

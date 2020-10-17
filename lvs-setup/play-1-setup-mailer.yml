@@ -1,0 +1,49 @@
+---
+
+ - hosts: all
+   
+   tasks: 
+
+   #- debug: var=play_hosts
+   #- debug: var=groups.all
+   
+   - apt:
+       state: latest
+       pkg: ['nullmailer', 'mailutils', 'xinetd']
+   
+   - name: Expose an SMTP service on localhost
+     copy:
+       src: files/etc/xinetd.d/sendmail
+       dest: /etc/xinetd.d/sendmail
+    
+   - name: Configure SMTP smarthost for nullmailer 
+     copy:
+       content: >
+          {{smtp_smarthost}} smtp 
+          --starttls --port={{smtp_port| default('25')}} --user={{smtp_user}} --pass={{lookup('password', smtp_pass_file) }}
+       dest: /etc/nullmailer/remotes
+   
+   - name: Set the default domain for mail recipients
+     copy:
+       content: "{{smtp_default_domain| default('')}}"
+       dest: /etc/nullmailer/defaultdomain
+
+   - copy:
+       src: "{{smtp_ca_file}}"
+       dest: /usr/local/share/ca-certificates/smtp-ca.crt
+       force: no
+     when: smtp_ca_file is defined
+   
+   - command:
+       cmd: /usr/sbin/update-ca-certificates
+     when: smtp_ca_file is defined
+
+   - systemd:
+       name: xinetd.service
+       state: restarted
+   
+   - systemd:
+       name: nullmailer.service
+       state: restarted
+
+

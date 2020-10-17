@@ -1,0 +1,77 @@
+# see also: man keepalived.conf
+# see also: https://docs.oracle.com/cd/E37670_01/E41138/html/section_xsx_wl2_4r.html
+# see also: https://keepalived.readthedocs.io/en/latest/
+
+global_defs {
+    notification_email {
+        {{email_to}}
+    }
+    notification_email_from {{email_from}}
+    smtp_server 127.0.0.1
+    smtp_connect_timeout 30
+    router_id {{fqdn}}
+}
+
+vrrp_sync_group VG1 {
+    group {
+        _internal_network
+    }
+}
+
+vrrp_instance _internal_network {
+    state {{vrrp_state}}
+    interface {{internal_iface}}
+    virtual_router_id 52
+    priority 100
+    advert_int 3
+    authentication {
+        auth_type AH
+        auth_pass {{auth_password}}
+    }
+    track_interface {
+        # NOTE: If {{external_iface}} is tracked, uncomment the corresponding VIP in virtual_ipaddress block
+        #{{external_iface}}
+    }
+    virtual_ipaddress {
+        {{internal_ipv4_virtual_address}}
+        # <IPADDR>/<MASK> dev <IFACE>
+        #{{external_ipv4_virtual_address}}/{{external_ipv4_network| ipaddr('prefix')}} dev {{external_iface}}
+    }
+}
+
+# Note: use `ipvsadm -L` to see actual IPVS table
+
+{%  for service in ipvs.services -%}
+
+virtual_server {{external_ipv4_virtual_address}} {{service.port}} {
+    delay_loop 60
+    lb_algo wrr
+    lb_kind NAT
+    persistence_timeout 50
+    protocol {{service.protocol | default('TCP')}}
+{%      for backend in service.backend %}
+    real_server {{backend.ip}} {{backend.port}} {
+        weight {{backend.weight | default('1')}}
+{%          if (backend.check.http_get is defined) %}
+        HTTP_GET {
+            url {
+                path {{backend.check.http_get.url.path | default('/_health')}}
+                digest {{backend.check.http_get.url.digest}}
+                status_code 200
+            }
+            connect_port {{backend.check.http_get.connect_port | default(backend.port)}}
+            connect_timeout 3
+            retry 3
+            delay_before_retry 2
+        }
+{%          else %}
+        TCP_CHECK {
+            connect_timeout 3
+        }
+{%          endif %}{# backend.check.http_get #}
+    }
+{%      endfor %}{# backend #}
+}
+
+{%  endfor %}{# service #}
+

@@ -1,0 +1,9 @@
+INTERNAL_IFACE="{{internal_iface}}"
+INTERNAL_ADDR="{{ipv4_address}}"
+INTERNAL_VIRTUAL_ADDR="{{internal_ipv4_virtual_address}}"
+INTERNAL_NETWORK="{{internal_network}}"
+
+EXTERNAL_IFACE="{{external_iface}}"
+
+DNAT_MAP=""
+

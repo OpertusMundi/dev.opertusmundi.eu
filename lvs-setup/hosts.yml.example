@@ -1,0 +1,82 @@
+# :vim: set syntax=yaml
+
+---
+
+all:
+  vars:
+
+    internal_network: '192.168.5.0/24'
+    # the internal virtual IP (also gateway for backend servers!)
+    internal_ipv4_virtual_address: '192.168.5.3'
+
+    # the external virtual IP
+    external_ipv4_network: '192.168.1.0/24'
+    external_ipv4_virtual_address: '192.168.1.200'
+
+    # configuration for SMTP smarthost
+    smtp_smarthost: 'mail.localdomain'
+    smtp_port: 25
+    smtp_user: 'monitor'
+    smtp_pass_file: 'secrets/smtp/user/monitor'
+    smtp_ca_file: 'secrets/smtp/ca.pem'
+
+    # configuration for notification emails
+    email_from: monitor@localdomain
+    email_to: root@localdomain
+
+    # configuration for IPVS (virtual servers) in NAT mode
+    ipvs:
+      services:
+      # An example SSH forwarding to an internal host
+      - port: 30530
+        protocol: TCP
+        backend:
+        - ip: "192.168.5.30"
+          port: 22
+          # if check is omitted, a simple TCP_CHECK will be generated
+          check: {}
+      # A example HTTPS service with load balancing on 2 backends
+      - port: 443
+        protocol: TCP
+        backend:
+        - ip: "192.168.5.32"
+          port: "30411"
+          weight: 1
+          check:
+            http_get:
+              url:
+                path: '/healthz'
+                # https://keepalived.readthedocs.io/en/latest/programs_synopsis.html#genhash-utility
+                digest: 'd41d8cd98f00b204e9800998ecf8427e'
+              # the port for the health endpoint may be different from the backend port
+              # (e.g for an HTTPS service, we could check on the a plain HTTP port)
+              connect_port: 31414
+        - ip: "192.168.5.33"
+          port: "30411"
+          weight: 1
+          check:
+            http_get:
+              url:
+                path: '/healthz'
+                digest: 'd41d8cd98f00b204e9800998ecf8427e'
+              connect_port: 31414
+
+  children:
+    'nat':
+      hosts:
+        'master':
+           ansible_host: nat-c1-x0.internal
+           ansible_port: 22
+           fqdn: nat-c1-x0.dev-1.localdomain
+           hostname: nat-c1-x0
+           ipv4_address: '192.168.5.4'
+           # the MAC address of the external (public-facing) network interface 
+           # (we need it to identify the interface, because no real IP will be assigned)
+           external_mac_address: '08:00:27:35:77:12'
+        'backup':
+           ansible_host: nat-c1-x1.internal
+           ansible_port: 22
+           fqdn: nat-c1-x1.dev-1.localdomain
+           hostname: nat-c1-x1
+           ipv4_address: '192.168.5.5'
+           external_mac_address: '08:00:27:44:04:83'
