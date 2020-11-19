@@ -1,0 +1,79 @@
+version: '3.6'
+services:
+
+  # The Drone CI server
+  drone_server:
+    
+    image: 'drone/drone:1'
+    hostname: 'drone-server'
+
+    volumes:
+    - type: 'volume'
+      source: 'drone_server_data'
+      target: '/data'
+    - type: 'bind'
+      source: './certs'
+      target: '/certs'
+      
+    networks:
+      drone_network:
+        aliases:
+        - ${SERVER_HOST}
+
+    ports:
+    - '8080:80'
+    - '9443:443'
+
+    restart: 'always'
+
+    environment:
+      DRONE_SERVER_PROTO: 'https'
+      DRONE_GITHUB_CLIENT_ID: ${DRONE_GITHUB_CLIENT_ID}
+      DRONE_GITHUB_CLIENT_SECRET: ${DRONE_GITHUB_CLIENT_SECRET}
+      DRONE_RPC_SECRET: ${DRONE_RPC_SECRET}
+      DRONE_SERVER_HOST: ${SERVER_HOST}:9443
+      DRONE_TLS_CERT: /certs/server.crt
+      DRONE_TLS_KEY: /certs/server.key
+      DRONE_USER_FILTER: ${DRONE_USER_FILTER}
+      DRONE_USER_CREATE: ${DRONE_USER_CREATE}
+  
+  # The Drone CI runner service
+  drone_runner:
+
+    image: 'drone/drone-runner-docker:1'
+    
+    volumes:
+    - type: 'bind'
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+
+    networks:
+    - drone_network
+    
+    restart: 'always'
+     
+    ports:
+    - '3000:3000'
+    
+    environment:
+      DRONE_RPC_HOST: ${SERVER_HOST}
+      DRONE_RPC_PROTO: 'https'
+      DRONE_RPC_SECRET: ${DRONE_RPC_SECRET}
+      DRONE_RUNNER_CAPACITY: 4
+      DRONE_UI_USERNAME: ${DRONE_UI_USERNAME}
+      DRONE_UI_PASSWORD: ${DRONE_UI_PASSWORD}
+      # needed to add CA certificate for private registry
+      DRONE_RUNNER_VOLUMES: /etc/docker/certs.d/:/etc/docker/certs.d/
+      DRONE_RUNNER_ENVIRON: >-
+        REGISTRY_HOST:${REGISTRY_HOST},REGISTRY_PORT:${REGISTRY_PORT},NAMESERVER_1:${NAMESERVER_1}
+
+volumes:
+  drone_server_data:
+
+
+networks:
+  # Note: an extenal network must have been created in advance (not managed by this "stack"), eg:
+  #   docker network create --attachable --driver overlay --subnet 10.0.4.0/22 some_network
+  drone_network: {external: true}
+
+
