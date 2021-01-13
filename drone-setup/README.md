@@ -12,7 +12,55 @@ Copy `.env.example` into `.env` and configure to your needs.
 
 For Docker-based pipelines see also: https://docs.drone.io/pipeline/docker/overview/
 
-An example pipeline (inside a project's `.drone.yml`) would be like:
+### Example - Use Docker-in-Docker for testing
+
+An example pipeline would be like (in a helloworld project):
+```yml
+kind: pipeline
+type: docker
+name: testing-1
+
+steps:
+- name: testing-in-docker
+  image: docker:19.03-dind
+  when:
+    event:
+    - push
+    - tag
+  volumes:
+  - name: docker_run
+    path: /var/run
+  environment:
+    DOCKER_HOST: unix:///var/run/docker.sock
+  commands:
+  # wait for Docker service to be up
+  - >-
+    (t=0; T=5; while ! docker info -f '{{.ID}}' 2>/dev/null; do t=$(( t + 1 )); test ${t} -ne ${T}; sleep 1; done)
+  - docker info
+  # build the image for testing
+  - docker build . -f testing.dockerfile -t helloworld:${DRONE_COMMIT}-testing
+  # run nosetests inside a testing container
+  - docker run --rm -u 1000:1000 -v $PWD:/work -w /work/ helloworld:${DRONE_COMMIT}-testing
+
+services:
+- name: docker
+  image: docker:19.03-dind
+  privileged: true
+  command:
+  # optional: use a registry mirror to cache images from Docker Hub
+  - --registry-mirror=http://registry-mirror:5000
+  volumes:
+  - name: docker_run
+    path: /var/run
+
+volumes:
+- name: docker_run
+  temp: {}
+```
+
+### Example - Build Docker image
+
+An example step of a pipeline would be like :
 ```yml
 # A step that builds the Docker image using Docker-in-Docker (see https://docs.drone.io/plugins/popular/docker/)
 - name: docker-build

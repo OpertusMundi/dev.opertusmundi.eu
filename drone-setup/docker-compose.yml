@@ -3,10 +3,8 @@ services:
 
   # The Drone CI server
   drone_server:
-    
     image: 'drone/drone:1'
     hostname: 'drone-server'
-
     volumes:
     - type: 'volume'
       source: 'drone_server_data'
@@ -14,18 +12,14 @@ services:
     - type: 'bind'
       source: './certs'
       target: '/certs'
-      
     networks:
       drone_network:
         aliases:
         - ${SERVER_HOST}
-
     ports:
     - '8080:80'
     - '9443:443'
-
     restart: 'always'
-
     environment:
       DRONE_SERVER_PROTO: 'https'
       DRONE_GITHUB_CLIENT_ID: ${DRONE_GITHUB_CLIENT_ID}
@@ -37,24 +31,20 @@ services:
       DRONE_USER_FILTER: ${DRONE_USER_FILTER}
       DRONE_USER_CREATE: ${DRONE_USER_CREATE}
   
+  #
   # The Drone CI runner service
+  #
   drone_runner:
-
     image: 'drone/drone-runner-docker:1'
-    
     volumes:
     - type: 'bind'
       source: /var/run/docker.sock
       target: /var/run/docker.sock
-
     networks:
     - drone_network
-    
     restart: 'always'
-     
-    ports:
-    - '3000:3000'
-    
+    #ports:
+    #- '3000:3000'
     environment:
       DRONE_RPC_HOST: ${SERVER_HOST}
       DRONE_RPC_PROTO: 'https'
@@ -64,16 +54,41 @@ services:
       DRONE_UI_PASSWORD: ${DRONE_UI_PASSWORD}
       # needed to add CA certificate for private registry
       DRONE_RUNNER_VOLUMES: /etc/docker/certs.d/:/etc/docker/certs.d/
+      DRONE_RUNNER_NETWORKS: registry_network
       DRONE_RUNNER_ENVIRON: >-
         REGISTRY_HOST:${REGISTRY_HOST},REGISTRY_PORT:${REGISTRY_PORT},NAMESERVER_1:${NAMESERVER_1}
+  
+  #
+  # A registry mirror for the Docker Hub
+  # note: only needed for Docker-in-Docker pipelines to save network bandwidth
+  #
+  registry_mirror:
+    image: 'registry:2.7'
+    volumes:
+    - type: 'volume'
+      source: 'registry_data'
+      target: '/var/lib/registry'
+    networks:
+      registry_network:
+        aliases:
+        - registry-mirror
+    restart: 'always'
+    #ports:
+    #- '5000:5000'
+    environment:
+      REGISTRY_HTTP_SECRET: ${REGISTRY_MIRROR_HTTP_SECRET}
+      REGISTRY_HTTP_ADDR: '0.0.0.0:5000'
+      REGISTRY_PROXY_REMOTEURL: 'https://registry-1.docker.io'
+
 
 volumes:
   drone_server_data:
+  registry_data:
 
 
 networks:
   # Note: an extenal network must have been created in advance (not managed by this "stack"), eg:
   #   docker network create --attachable --driver overlay --subnet 10.0.4.0/22 some_network
   drone_network: {external: true}
-
+  registry_network: {external: true}
 
