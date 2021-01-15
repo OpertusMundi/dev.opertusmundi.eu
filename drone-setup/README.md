@@ -74,6 +74,9 @@ An example step of a pipeline would be like :
     username: user
     password:
       from_secret: registry_password
+    # use a mirror registry instead of pulling images directly from the central Hub
+    #mirror: http://registry-mirror:5000  
+    # registry to push image to
     registry: |-
       ${REGISTRY_HOST}:${REGISTRY_PORT}
     repo: |-
