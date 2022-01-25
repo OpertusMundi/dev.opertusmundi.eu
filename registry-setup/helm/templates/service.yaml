@@ -1,0 +1,19 @@
+# vim: set filetype=helm:
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "registry.fullname" . }}
+  labels:
+    {{- include "registry.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      {{ if and (eq .Values.service.type "NodePort") (.Values.service.nodePort) -}}
+      nodePort: {{ .Values.service.nodePort }}
+      {{ end -}} 
+      targetPort: https
+      name: https
+  selector:
+    {{- include "registry.selectorLabels" . | nindent 4 }}

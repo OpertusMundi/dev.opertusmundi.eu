@@ -1,0 +1,91 @@
+# vim: set filetype=helm:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "registry.fullname" . }}
+  labels:
+    {{- include "registry.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "registry.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "registry.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "registry.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ .Values.registry.pvcName | default (printf "%s-data-pvc" .Release.Name) }}
+      - name: certs
+        secret:
+          secretName: {{ .Values.registry.tls.secretName | default (printf "%s-tls" .Release.Name) }}
+      - name: auth
+        secret:
+          secretName: {{ .Release.Name }}-htpasswd
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: REGISTRY_HTTP_ADDR 
+            value: "0.0.0.0:443"
+          - name: REGISTRY_HTTP_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Release.Name }}-http-secret
+                key: http-secret
+          - name: REGISTRY_HTTP_TLS_CERTIFICATE
+            value: /certs/tls.crt
+          - name: REGISTRY_HTTP_TLS_KEY
+            value: /certs/tls.key
+          - name: REGISTRY_STORAGE_DELETE_ENABLED
+            value: "true"
+          - name: REGISTRY_AUTH
+            value: htpasswd
+          - name: REGISTRY_AUTH_HTPASSWD_REALM
+            value: {{ .Release.Name }}
+          - name: REGISTRY_AUTH_HTPASSWD_PATH
+            value: /auth/htpasswd
+          volumeMounts:
+          - name: data
+            mountPath: /var/lib/registry
+          - name: certs
+            readOnly: true
+            mountPath: /certs
+          - name: auth
+            readOnly: true
+            mountPath: /auth
+          ports:
+          - name: https
+            containerPort: 443
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
