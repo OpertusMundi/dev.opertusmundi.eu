@@ -11,9 +11,11 @@ _validate_username ${username} username_local_part username_domain
 
 declare -r project_path=${user_dir%/}
 [[ -d ${project_path} ]]
-declare -r project_id_seq_file="~/.project-id-seq"
-declare -r project_id_seq_lock_file="~/.project-id-seq-lock"
 
+declare -r project_id_seq_file=$(realpath ~/.project-id-seq)
+declare -r project_id_seq_lock_file=$(realpath ~/.project-id-seq-lock)
+[[ -f ${project_id_seq_file} ]]
+[[ -f ${project_id_seq_lock_file} ]]
 
 #
 # Determine project name/id
