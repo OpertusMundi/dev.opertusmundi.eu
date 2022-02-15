@@ -1,0 +1,3 @@
+[submodule "xfs/quota-management/temporary-email-address-domains"]
+	path = xfs/quota-management/temporary-email-address-domains
+	url = https://gist.github.com/chgeorgakidis/cb08d79b56d918aa379b2ca61fff7f46
