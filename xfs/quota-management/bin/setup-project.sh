@@ -47,9 +47,6 @@ else
     [[ ${project_name} == ${existing_project_name} ]]
 fi
 
-logger -s -p local7.info -t ${0} -- \
-    "Setting up project #${project_id} for user [${username}]"
-
 #
 # Setup project for XFS quota
 #
