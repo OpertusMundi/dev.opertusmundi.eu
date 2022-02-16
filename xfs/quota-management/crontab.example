@@ -1,0 +1,16 @@
+# vim:set syntax=crontab:
+
+# NOTE: install under /etc/cron.d/quota-management
+
+PATH = /usr/bin:/bin:/usr/sbin
+SHELL = /bin/bash
+
+users_dir = /var/local/nfs/data-3/files/users/
+work_dir = /root/opt/dev.opertusmundi.eu/xfs/quota-management/
+
+0-59/10 * * * * root    cd ${work_dir} && ./bin/setup-projects-for-users.sh ${users_dir} | logger -p local7.info
+
+5-59/10 * * * * root    cd ${work_dir} && ./bin/report-project-quota-for-users.sh ${users_dir} | logger -p local7.info
+
+0-59/12 * * * * root    cd ${work_dir} && ./bin/process-project-quota-requests-for-users.sh ${users_dir} | logger -p local7.info
+
