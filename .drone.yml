@@ -1,0 +1,37 @@
+---
+kind: pipeline
+type: docker
+name: default
+
+trigger:
+  branch:
+  - api-usage-logs-ingestor
+
+environment: {}
+
+steps:
+
+- name: prepare-tags
+  image: busybox:1.32
+  when:
+    event:
+    - push
+  commands:
+  - echo -n "1,1.0" > .tags
+
+- name: publish-image
+  image: plugins/docker
+  when:
+    event:
+    - push
+  settings:
+    debug: true 
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password
+    context: api-usage-logs-ingestor
+    dockerfile: api-usage-logs-ingestor/Dockerfile
+    repo: opertusmundi/api-usage-logs-ingestor
+    mirror: http://registry-mirror:5000
+
