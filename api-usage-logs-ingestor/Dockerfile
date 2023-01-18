@@ -20,4 +20,4 @@ ENV QUARKUS_BANNER_ENABLED="false" \
   QUARKUS_DATASOURCE_USERNAME="opertusmundi" \
   QUARKUS_DATASOURCE_PASSWORD=""
 
-CMD ["java", "-jar", "ingest.jar"]
+ENTRYPOINT ["java", "-jar", "ingest.jar"]
