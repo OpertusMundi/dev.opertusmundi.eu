@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -286,7 +287,10 @@ class PodWatcherService implements  Watcher<Pod>
             }
             break;
         case MODIFIED:
-            // no-op
+            {
+                LOGGER.info("A pod was modified [podName={}]: no-op", podName);
+                // no-op
+            }
             break;
         default:
             // no-op
@@ -373,6 +377,8 @@ class PodWatcherService implements  Watcher<Pod>
                     throw new IllegalStateException(ex);
                 }
             }
+            
+            logger.info("Finished reader task [podName={}]", podName);
         }
     } 
 }
@@ -555,8 +561,10 @@ class LogRecordWriterService implements Consumer<LogRecord>
                     setParametersForUpdateStatement(updateStatement, record);
                     updateStatement.addBatch();
                 }
-                updateStatement.executeBatch();
+                final int[] updateCounters = updateStatement.executeBatch();
                 conn.commit();
+                LOGGER.info("Updated {}/{} records", 
+                    IntStream.of(updateCounters).sum(), updateCounters.length);
             } catch (Exception ex) {
                 LOGGER.error("Failed to update with batch of records", ex);
                 throw new IllegalStateException(ex);
