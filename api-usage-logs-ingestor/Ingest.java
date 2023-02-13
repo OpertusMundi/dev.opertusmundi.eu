@@ -19,6 +19,7 @@
 //Q:CONFIG quarkus.datasource.db-kind=postgresql
 
 import java.io.BufferedReader;
+import java.io.Reader;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -28,6 +29,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -75,6 +78,8 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.WatcherException;
+import io.fabric8.kubernetes.client.dsl.LogWatch;
+import io.fabric8.kubernetes.client.dsl.Loggable;
 import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.quarkus.arc.Priority;
 import io.quarkus.arc.profile.IfBuildProfile;
@@ -340,11 +345,13 @@ class PodWatcherService implements  Watcher<Pod>
                 return;
             }
             
-            var podLogs = podResource.usingTimestamps()
+            Loggable<LogWatch> podLogs = podResource.usingTimestamps()
                 .sinceTime(sinceTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-            try (BufferedReader reader = new BufferedReader(podLogs.getLogReader())) {
+            
+            try (Scanner scanner = new Scanner(podLogs.getLogReader())) {
                 String line = null;
-                while ((line = reader.readLine()) != null) {
+                while (scanner.hasNextLine()) {
+                    line = scanner.nextLine();
                     //System.err.println("  >> " + line);
                     String[] fields = line.split("\\s+", 2);
                     ZonedDateTime time = null;
